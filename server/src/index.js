@@ -3,6 +3,8 @@ dotenv.config();
 
 import express from 'express';
 import authRoutes from './routes/authRoutes.js';
+import inventarisRoutes from './routes/inventarisRoutes.js';
+import kategoriRoutes from './routes/kategoriRoutes.js';
 import logger from './config/logger.js';
 
 const app = express();
@@ -16,6 +18,12 @@ app.use((req, res, next) => {
 
 // Register auth routes
 app.use('/auth', authRoutes);
+
+// Register inventaris routes
+app.use('/inventaris', inventarisRoutes);
+
+// Register kategori routes
+app.use('/kategori', kategoriRoutes);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {

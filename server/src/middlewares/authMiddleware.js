@@ -31,7 +31,9 @@ export const authorizeRole = (role) => {
     if (error || !profile) {
       return res.status(403).json({ error: 'Akses ditolak.' });
     }
-    if (profile.role !== role) {
+    // role bisa string atau array
+    const allowedRoles = Array.isArray(role) ? role : [role];
+    if (!allowedRoles.includes(profile.role)) {
       return res.status(403).json({ error: 'Role tidak sesuai.' });
     }
     next();
