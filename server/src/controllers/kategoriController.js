@@ -1,8 +1,36 @@
 import supabase from '../config/supabase.js';
+// Ambil audit log kategori beserta nama user
+export const getAuditLogKategori = async (req, res) => {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*, user_profiles(name)')
+    .eq('table_name', 'kategori')
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+};
+// Fungsi untuk mencatat audit log
+const logAudit = async ({ user_id, action, table_name, record_id, detail }) => {
+  const { error } = await supabase.from('audit_log').insert({
+    user_id,
+    action,
+    table_name,
+    record_id,
+    detail,
+    created_at: new Date().toISOString()
+  });
+  if (error) {
+    console.error('Audit log error:', error.message);
+  }
+};
 
 // Ambil semua kategori
 export const getKategori = async (req, res) => {
-  const { data, error } = await supabase.from('kategori').select('*');
+  // Only return active categories
+  const { data, error } = await supabase
+    .from('kategori')
+    .select('*')
+    .eq('status', 'active');
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 };
@@ -65,13 +93,39 @@ export const updateKategori = async (req, res) => {
   if (!data || data.length === 0) {
     return res.status(404).json({ error: 'Kategori tidak ditemukan.' });
   }
+  // Audit log
+  const user_id = req.user?.id || null;
+  await logAudit({
+    user_id,
+    action: 'edit',
+    table_name: 'kategori',
+    record_id: id, // id_kategori bertipe uuid
+    detail: { before: req.body, after: data[0] }
+  });
   res.json(data[0]);
 };
 
-// Hapus kategori
+// Soft delete kategori (set status to 'inactive')
 export const deleteKategori = async (req, res) => {
   const { id } = req.params;
-  const { error } = await supabase.from('kategori').delete().eq('id_kategori', id);
+  // Update status to 'inactive' instead of deleting
+  const { data, error } = await supabase
+    .from('kategori')
+    .update({ status: 'inactive' })
+    .eq('id_kategori', id)
+    .select();
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ message: 'Kategori berhasil dihapus' });
+  if (!data || data.length === 0) {
+    return res.status(404).json({ error: 'Kategori tidak ditemukan.' });
+  }
+  // Audit log
+  const user_id = req.user?.id || null;
+  await logAudit({
+    user_id,
+    action: 'delete',
+    table_name: 'kategori',
+    record_id: id, // id_kategori bertipe uuid
+    detail: { after: data[0] }
+  });
+  res.json({ message: 'Kategori berhasil di-nonaktifkan' });
 };
