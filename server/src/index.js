@@ -6,6 +6,7 @@ import authRoutes from './routes/authRoutes.js';
 import inventarisRoutes from './routes/inventarisRoutes.js';
 import kategoriRoutes from './routes/kategoriRoutes.js';
 import stokRoutes from './routes/stokRoutes.js';
+import transaksiRoutes from './routes/transaksiRoutes.js';
 import logger from './config/logger.js';
 
 const app = express();
@@ -28,6 +29,9 @@ app.use('/kategori', kategoriRoutes);
 
 // Register stok routes
 app.use('/stok', stokRoutes);
+
+// transaksi
+app.use('/transaksi', transaksiRoutes);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
