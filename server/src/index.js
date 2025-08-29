@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import cors from 'cors'
+
 import express from 'express';
 import authRoutes from './routes/authRoutes.js';
 import inventarisRoutes from './routes/inventarisRoutes.js';
@@ -17,6 +19,8 @@ app.use((req, res, next) => {
   logger.info(`${req.method} ${req.originalUrl}`);
   next();
 });
+
+app.use(cors());
 
 // Register auth routes
 app.use('/auth', authRoutes);
