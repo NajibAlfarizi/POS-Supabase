@@ -4,17 +4,17 @@ import ExcelJS from 'exceljs'
 // Ringkasan transaksi (harian, mingguan, bulanan, filter kategori/metode bayar)
 export const getRingkasanTransaksi = async (req, res) => {
   const { tipe, kategori, metode_bayar, tanggal_mulai, tanggal_selesai } = req.query;
-  let query = supabase.from('transaksi').select('total_harga, id_kategori, metode_bayar, tanggal');
+  let query = supabase.from('transaksi').select('total_harga, id_kategori, metode_bayar, tanggal, tipe');
 
-  // Filter kategori
+  if (tipe) {
+    query = query.eq('tipe', tipe);
+  }
   if (kategori) {
     query = query.eq('id_kategori', kategori);
   }
-  // Filter metode bayar
   if (metode_bayar) {
     query = query.eq('metode_bayar', metode_bayar);
   }
-  // Filter tanggal
   if (tanggal_mulai && tanggal_selesai) {
     query = query.gte('tanggal', tanggal_mulai).lte('tanggal', tanggal_selesai);
   }
@@ -22,14 +22,13 @@ export const getRingkasanTransaksi = async (req, res) => {
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 
-  // Rekap berdasarkan tipe
   let total = 0;
   if (data && data.length > 0) {
     total = data.reduce((sum, trx) => sum + Number(trx.total_harga), 0);
   }
 
   res.json({
-    tipe: tipe || 'custom',
+    tipe: tipe || 'all',
     kategori: kategori || null,
     metode_bayar: metode_bayar || null,
     tanggal_mulai: tanggal_mulai || null,
@@ -69,9 +68,12 @@ export const getStrukTransaksi = async (req, res) => {
 
 // Ambil semua transaksi (dengan filter opsional)
 export const getTransaksi = async (req, res) => {
-  const { kategori, user_id, tanggal_mulai, tanggal_selesai, search } = req.query;
+  const { kategori, user_id, tanggal_mulai, tanggal_selesai, search, tipe } = req.query;
   let query = supabase.from('transaksi').select('*');
 
+  if (tipe) {
+    query = query.eq('tipe', tipe);
+  }
   if (kategori) {
     query = query.eq('id_kategori', kategori);
   }
@@ -92,8 +94,9 @@ export const getTransaksi = async (req, res) => {
 
 // Export transaksi as CSV (with same filters as getTransaksi)
 export const exportTransaksiCSV = async (req, res) => {
-  const { kategori, user_id, tanggal_mulai, tanggal_selesai, search, metode_bayar } = req.query;
-  let query = supabase.from('transaksi').select('id_transaksi, keterangan, total_harga, metode_bayar, tanggal, kategori(nama_kategori), user_profiles(name)');
+  const { kategori, user_id, tanggal_mulai, tanggal_selesai, search, metode_bayar, tipe } = req.query;
+  let query = supabase.from('transaksi').select('id_transaksi, keterangan, total_harga, metode_bayar, tanggal, kategori(nama_kategori), user_profiles(name), tipe');
+  if (tipe) query = query.eq('tipe', tipe);
   if (kategori) query = query.eq('id_kategori', kategori);
   if (user_id) query = query.eq('id_user', user_id);
   if (metode_bayar) query = query.eq('metode_bayar', metode_bayar);
@@ -111,7 +114,8 @@ export const exportTransaksiCSV = async (req, res) => {
     keterangan: trx.keterangan,
     total_harga: trx.total_harga,
     metode_bayar: trx.metode_bayar,
-    tanggal: trx.tanggal
+    tanggal: trx.tanggal,
+    tipe: trx.tipe
   }));
 
   try {
@@ -126,8 +130,9 @@ export const exportTransaksiCSV = async (req, res) => {
 
 // Export transaksi as Excel (XLSX)
 export const exportTransaksiExcel = async (req, res) => {
-  const { kategori, user_id, tanggal_mulai, tanggal_selesai, search, metode_bayar } = req.query;
-  let query = supabase.from('transaksi').select('id_transaksi, keterangan, total_harga, metode_bayar, tanggal, kategori(nama_kategori), user_profiles(name)');
+  const { kategori, user_id, tanggal_mulai, tanggal_selesai, search, metode_bayar, tipe } = req.query;
+  let query = supabase.from('transaksi').select('id_transaksi, keterangan, total_harga, metode_bayar, tanggal, kategori(nama_kategori), user_profiles(name), tipe');
+  if (tipe) query = query.eq('tipe', tipe);
   if (kategori) query = query.eq('id_kategori', kategori);
   if (user_id) query = query.eq('id_user', user_id);
   if (metode_bayar) query = query.eq('metode_bayar', metode_bayar);
@@ -145,7 +150,8 @@ export const exportTransaksiExcel = async (req, res) => {
     keterangan: trx.keterangan,
     total_harga: trx.total_harga,
     metode_bayar: trx.metode_bayar,
-    tanggal: trx.tanggal
+    tanggal: trx.tanggal,
+    tipe: trx.tipe
   }));
 
   const workbook = new ExcelJS.Workbook();
@@ -179,12 +185,15 @@ export const getDetailTransaksi = async (req, res) => {
 
 // Tambah transaksi umum
 export const addTransaksi = async (req, res) => {
-  const { id_kategori, keterangan, total_harga, metode_bayar } = req.body;
+  const { id_kategori, keterangan, total_harga, metode_bayar, tipe } = req.body;
   const user_id = req.user?.id;
 
   // Validasi input
-  if (!id_kategori || !total_harga || !metode_bayar) {
-    return res.status(400).json({ error: 'id_kategori, total_harga, dan metode_bayar wajib diisi.' });
+  if (!id_kategori || !total_harga || !metode_bayar || !tipe) {
+    return res.status(400).json({ error: 'id_kategori, total_harga, metode_bayar, dan tipe wajib diisi.' });
+  }
+  if (!['masuk', 'keluar'].includes(tipe)) {
+    return res.status(400).json({ error: 'tipe harus "masuk" atau "keluar".' });
   }
 
   // Simpan transaksi
@@ -195,7 +204,8 @@ export const addTransaksi = async (req, res) => {
       id_kategori,
       keterangan,
       total_harga,
-      metode_bayar
+      metode_bayar,
+      tipe
       // tanggal otomatis
     })
     .select();
