@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
+import { toast } from "sonner";
 
 export function LoginForm(props: React.ComponentProps<"div">) {
   const { className, ...rest } = props;
@@ -24,14 +25,22 @@ export function LoginForm(props: React.ComponentProps<"div">) {
     try {
       const res = await login(email, password);
       if (res.access_token) {
-        localStorage.setItem("access_token", res.access_token);
-        localStorage.setItem("user_role", res.user.role);
+        // Simpan user, access_token, refresh_token dalam satu object agar dashboard bisa membaca token
+        localStorage.setItem("user", JSON.stringify({
+          ...res.user,
+          access_token: res.access_token,
+          refresh_token: res.refresh_token
+        }));
+        toast.success(`Hallo, selamat datang ${res.user.name}, have a nice day`);
         router.push("/dashboard");
       } else {
         setError("Login gagal. Cek email/password.");
+        toast.error("email dan password salah");
       }
     } catch (err: any) {
-      setError(err?.response?.data?.error || "Login gagal.");
+      const msg = err?.response?.data?.error || "Login gagal.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -74,9 +83,6 @@ export function LoginForm(props: React.ComponentProps<"div">) {
                   disabled={loading}
                 />
               </div>
-              {error && (
-                <div className="text-red-500 text-sm text-center">{error}</div>
-              )}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Loading..." : "Login"}
               </Button>

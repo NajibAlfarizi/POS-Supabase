@@ -1,5 +1,6 @@
 import express from 'express';
-import { getKategori, addKategori, updateKategori, deleteKategori, getAuditLogKategori } from '../controllers/kategoriController.js';
+import { getKategori, addKategori, updateKategori, deleteKategori, getAuditLogKategori, activateKategori, getKategoriStatistik } from '../controllers/kategoriController.js';
+
 import { authenticate, authorizeRole } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -18,5 +19,9 @@ router.put('/:id', authenticate, authorizeRole(['admin', 'owner']), updateKatego
 
 // Hapus kategori (admin/owner)
 router.delete('/:id', authenticate, authorizeRole(['admin', 'owner']), deleteKategori);
+// Aktifkan kategori (admin/owner)
+router.put('/activate/:id', authenticate, authorizeRole(['admin', 'owner']), activateKategori);
 
+// Statistik kategori
+router.get('/statistik', authenticate, getKategoriStatistik);
 export default router;

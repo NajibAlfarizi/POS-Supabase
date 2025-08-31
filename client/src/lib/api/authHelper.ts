@@ -20,12 +20,12 @@ export async function addAdmin(name: string, email: string, password: string) {
   return res.data;
 }
 
-// Get user profile (by token)
-export async function getProfile(token: string) {
-  const res = await axios.get(`${API_URL}/auth/profile`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  return res.data;
+// Get user profile (langsung dari localStorage, tidak request ke backend)
+export function getProfile() {
+  if (typeof window === 'undefined') return null;
+  const userStr = localStorage.getItem('user');
+  if (!userStr) throw new Error('Token tidak valid');
+  return JSON.parse(userStr);
 }
 
 // Logout user
@@ -35,3 +35,14 @@ export async function logout(token: string) {
   });
   return res.data;
 }
+
+// Refresh access token
+export async function refreshAccessToken(refresh_token: string) {
+  const res = await axios.post(`${API_URL}/auth/refresh`, { refresh_token });
+  // Response: { user, access_token, refresh_token }
+  return res.data;
+}
+export function refreshToken(): any {
+    throw new Error("Function not implemented.");
+}
+
