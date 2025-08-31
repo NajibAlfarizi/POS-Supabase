@@ -1,5 +1,5 @@
 import express from 'express';
-import { getInventaris, addInventaris, updateInventaris, deleteInventaris, filterInventaris, exportInventarisCSV } from '../controllers/inventarisController.js';
+import { getInventaris, addInventaris, updateInventaris, deleteInventaris, filterInventaris, exportInventarisCSV, getAuditLogInventaris } from '../controllers/inventarisController.js';
 import { authenticate, authorizeRole } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -21,5 +21,8 @@ router.put('/:id', authenticate, authorizeRole(['admin', 'owner']), updateInvent
 
 // Hapus inventaris (admin/owner)
 router.delete('/:id', authenticate, authorizeRole(['admin', 'owner']), deleteInventaris);
+
+// Ambil audit log inventaris
+router.get('/audit-log', authenticate, authorizeRole(['admin', 'owner']), getAuditLogInventaris);
 
 export default router;

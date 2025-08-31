@@ -23,8 +23,17 @@ export const getRingkasanTransaksi = async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
 
   let total = 0;
+  let cashflow = 0;
+  let transaksi_hari_ini = 0;
+  const today = new Date().toISOString().slice(0, 10);
   if (data && data.length > 0) {
     total = data.reduce((sum, trx) => sum + Number(trx.total_harga), 0);
+    cashflow = data.reduce((sum, trx) => {
+      if (trx.tipe === 'masuk') return sum + Number(trx.total_harga);
+      if (trx.tipe === 'keluar') return sum - Number(trx.total_harga);
+      return sum;
+    }, 0);
+    transaksi_hari_ini = data.filter(trx => trx.tanggal && trx.tanggal.slice(0, 10) === today).length;
   }
 
   res.json({
@@ -34,13 +43,15 @@ export const getRingkasanTransaksi = async (req, res) => {
     tanggal_mulai: tanggal_mulai || null,
     tanggal_selesai: tanggal_selesai || null,
     total_transaksi: total,
-    jumlah_transaksi: data ? data.length : 0
+    jumlah_transaksi: data ? data.length : 0,
+    hari_ini: transaksi_hari_ini,
+    cashflow
   });
 };
 // Ambil data struk transaksi by id (JSON siap cetak)
 export const getStrukTransaksi = async (req, res) => {
   const { id } = req.params;
-  if (!id || isNaN(Number(id))) {
+  if (!id) {
     return res.status(400).json({ error: 'ID transaksi tidak valid.' });
   }
   // Ambil detail transaksi, join kategori dan user
@@ -69,7 +80,9 @@ export const getStrukTransaksi = async (req, res) => {
 // Ambil semua transaksi (dengan filter opsional)
 export const getTransaksi = async (req, res) => {
   const { kategori, user_id, tanggal_mulai, tanggal_selesai, search, tipe } = req.query;
-  let query = supabase.from('transaksi').select('*');
+  let query = supabase
+    .from('transaksi')
+    .select('*, kategori(nama_kategori), user_profiles(name)');
 
   if (tipe) {
     query = query.eq('tipe', tipe);
@@ -170,7 +183,7 @@ export const exportTransaksiExcel = async (req, res) => {
 // Ambil detail transaksi by id (join kategori dan user)
 export const getDetailTransaksi = async (req, res) => {
   const { id } = req.params;
-  if (!id || isNaN(Number(id))) {
+  if (!id) {
     return res.status(400).json({ error: 'ID transaksi tidak valid.' });
   }
   const { data, error } = await supabase
@@ -185,7 +198,7 @@ export const getDetailTransaksi = async (req, res) => {
 
 // Tambah transaksi umum
 export const addTransaksi = async (req, res) => {
-  const { id_kategori, keterangan, total_harga, metode_bayar, tipe } = req.body;
+  const { id_kategori, keterangan, total_harga, metode_bayar, tipe, id_inventaris, jumlah } = req.body;
   const user_id = req.user?.id;
 
   // Validasi input
@@ -194,6 +207,64 @@ export const addTransaksi = async (req, res) => {
   }
   if (!['masuk', 'keluar'].includes(tipe)) {
     return res.status(400).json({ error: 'tipe harus "masuk" atau "keluar".' });
+  }
+
+  // Cek kategori: jika barang/inventaris, update stok
+  let stokUpdated = false;
+  let stokError = null;
+  let stokRiwayat = null;
+  // Asumsi kategori barang/inventaris id_kategori = 'barang' atau bisa cek dari DB
+  // Ganti logika ini sesuai kebutuhan, misal cek nama_kategori dari tabel kategori
+  const { data: kategoriData, error: kategoriError } = await supabase
+    .from('kategori')
+    .select('nama_kategori, tipe')
+    .eq('id_kategori', id_kategori)
+    .single();
+  if (kategoriError) {
+    return res.status(400).json({ error: 'Kategori tidak ditemukan.' });
+  }
+
+  // Jika kategori barang/inventaris, update stok
+  if (kategoriData && kategoriData.tipe === 'barang' && id_inventaris && jumlah) {
+    // Update stok inventaris
+    const { data: inventaris, error: invError } = await supabase
+      .from('inventaris')
+      .select('stok')
+      .eq('id_inventaris', id_inventaris)
+      .single();
+    if (invError || !inventaris) {
+      stokError = 'Inventaris tidak ditemukan.';
+    } else {
+      let newStok = tipe === 'masuk' ? inventaris.stok + jumlah : inventaris.stok - jumlah;
+      if (tipe === 'keluar' && inventaris.stok < jumlah) {
+        stokError = 'Stok tidak mencukupi.';
+      } else {
+        const { error: updateError } = await supabase
+          .from('inventaris')
+          .update({ stok: newStok })
+          .eq('id_inventaris', id_inventaris);
+        if (updateError) {
+          stokError = updateError.message;
+        } else {
+          stokUpdated = true;
+          // Catat riwayat stok
+          const { error: riwayatError } = await supabase
+            .from('riwayat_stok')
+            .insert({
+              id_inventaris,
+              tipe_transaksi: tipe,
+              jumlah,
+              keterangan,
+              user_id
+            });
+          if (riwayatError) stokRiwayat = riwayatError.message;
+        }
+      }
+    }
+  }
+
+  if (stokError) {
+    return res.status(400).json({ error: stokError });
   }
 
   // Simpan transaksi
@@ -214,7 +285,7 @@ export const addTransaksi = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 
-  res.status(201).json(data[0]);
+  res.status(201).json({ ...data[0], stokUpdated, stokRiwayat });
 };
 
 // Laporan transaksi detail (group by kategori & metode_bayar, period filter)
@@ -249,26 +320,22 @@ export const getLaporanTransaksi = async (req, res) => {
   const { data, error } = await query.order('tanggal', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
 
-  // Group by kategori & metode_bayar
-  const laporan = {};
+  // Group by kategori & metode_bayar, flatten for frontend
+  const laporanArr = [];
+  const groupMap = {};
   (data || []).forEach(trx => {
     const kategori = trx.kategori?.nama_kategori || 'Lainnya';
     const metode = trx.metode_bayar || 'Lainnya';
-    if (!laporan[kategori]) laporan[kategori] = {};
-    if (!laporan[kategori][metode]) laporan[kategori][metode] = { total: 0, jumlah: 0, transaksi: [] };
-    laporan[kategori][metode].total += Number(trx.total_harga);
-    laporan[kategori][metode].jumlah += 1;
-    laporan[kategori][metode].transaksi.push({
-      id_transaksi: trx.id_transaksi,
-      oleh: trx.user_profiles?.name || '',
-      keterangan: trx.keterangan,
-      total_harga: trx.total_harga,
-      tanggal: trx.tanggal
-    });
+    const key = kategori + '|' + metode;
+    if (!groupMap[key]) {
+      groupMap[key] = { kategori, metode_bayar: metode, total: 0, jumlah: 0 };
+    }
+    groupMap[key].total += Number(trx.total_harga);
+    groupMap[key].jumlah += 1;
   });
+  for (const key in groupMap) {
+    laporanArr.push(groupMap[key]);
+  }
 
-  res.json({
-    periode: { tipe: tipe || 'custom', tanggal_mulai: startDate, tanggal_selesai: endDate },
-    laporan
-  });
+  res.json(laporanArr);
 };

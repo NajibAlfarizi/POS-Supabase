@@ -66,6 +66,16 @@ export const addInventaris = async (req, res) => {
     harga_jual
   }).select();
   if (error) return res.status(500).json({ error: error.message });
+  // Audit log
+  const user_id = req.user?.id || null;
+  await supabase.from('audit_log').insert({
+    user_id,
+    action: 'add',
+    table_name: 'inventaris',
+    record_id: data[0]?.id_inventaris,
+    detail: { after: data[0] },
+    created_at: new Date().toISOString()
+  });
   res.status(201).json(data[0]);
 };
 
@@ -119,17 +129,38 @@ export const updateInventaris = async (req, res) => {
     updated_at: new Date().toISOString()
   }).eq('id_inventaris', id).select();
   if (error) return res.status(500).json({ error: error.message });
+  // Audit log
+  const user_id = req.user?.id || null;
+  await supabase.from('audit_log').insert({
+    user_id,
+    action: 'update',
+    table_name: 'inventaris',
+    record_id: id,
+    detail: { after: data[0] },
+    created_at: new Date().toISOString()
+  });
   res.json(data[0]);
 };
 
 // Hapus inventaris
 export const deleteInventaris = async (req, res) => {
   const { id } = req.params;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('inventaris')
     .update({ status: 'inactive' })
-    .eq('id_inventaris', id);
+    .eq('id_inventaris', id)
+    .select();
   if (error) return res.status(500).json({ error: error.message });
+  // Audit log
+  const user_id = req.user?.id || null;
+  await supabase.from('audit_log').insert({
+    user_id,
+    action: 'delete',
+    table_name: 'inventaris',
+    record_id: id,
+    detail: { after: data[0] },
+    created_at: new Date().toISOString()
+  });
   res.json({ message: 'Item inventaris berhasil dinonaktifkan' });
 };
 
@@ -177,4 +208,14 @@ export const exportInventarisCSV = async (req, res) => {
   res.header('Content-Type', 'text/csv');
   res.attachment('inventaris.csv');
   res.send(csv);
+};
+
+export const getAuditLogInventaris = async (req, res) => {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*, user_profiles(name)')
+    .eq('table_name', 'inventaris')
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
 };
