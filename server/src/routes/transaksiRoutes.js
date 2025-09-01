@@ -1,29 +1,26 @@
 import express from 'express';
-import { addTransaksi, getTransaksi, getDetailTransaksi, getStrukTransaksi, getRingkasanTransaksi, exportTransaksiCSV, exportTransaksiExcel, getLaporanTransaksi } from '../controllers/transaksiController.js';
-import { authenticate, authorizeRole } from '../middlewares/authMiddleware.js';
+import * as transaksiController from '../controllers/transaksiController.js';
+import { authenticate } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-// Ambil semua transaksi
-router.get('/', authenticate, getTransaksi);
-
-// Ringkasan transaksi (harian, mingguan, bulanan, filter)
-router.get('/ringkasan', authenticate, getRingkasanTransaksi);
-
-// Laporan transaksi detail
-router.get('/laporan', authenticate, getLaporanTransaksi);
-
-// Export transaksi
-router.get('/export/csv', authenticate, exportTransaksiCSV);
-router.get('/export/excel', authenticate, exportTransaksiExcel);
-
-// Ambil detail transaksi by id
-router.get('/:id', authenticate, getDetailTransaksi);
-
-// Cetak struk transaksi
-router.get('/:id/struk', authenticate, getStrukTransaksi);
-
-// Tambah transaksi (admin/kasir/owner)
-router.post('/', authenticate, authorizeRole(['admin', 'owner']), addTransaksi);
+// Ambil semua transaksi (dengan filter)
+router.get('/', authenticate, transaksiController.getTransaksi);
+// Tambah transaksi baru
+router.post('/', authenticate, transaksiController.addTransaksi);
+// Update transaksi
+router.put('/:id', authenticate, transaksiController.updateTransaksi);
+// Hapus transaksi
+router.delete('/:id', authenticate, transaksiController.deleteTransaksi);
+// Detail transaksi
+router.get('/:id', authenticate, transaksiController.getDetailTransaksi);
+// Ringkasan transaksi
+router.get('/ringkasan', authenticate, transaksiController.getRingkasanTransaksi);
+// Struk transaksi
+router.get('/struk/:id', authenticate, transaksiController.getStrukTransaksi);
+// Export transaksi ke CSV
+router.get('/export/csv', authenticate, transaksiController.exportTransaksiCSV);
+// Export transaksi ke Excel
+router.get('/export/excel', authenticate, transaksiController.exportTransaksiExcel);
 
 export default router;

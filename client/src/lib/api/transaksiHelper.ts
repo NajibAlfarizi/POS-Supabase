@@ -59,8 +59,29 @@ export const getStrukTransaksi = async (token: string, id: string) => {
   return res.data;
 };
 
-export const addTransaksi = async (token: string, payload: any) => {
-  const res = await axios.post(`${API_URL}/transaksi`, payload, {
+export const getAllTransaksi = async (token: string) => {
+  const res = await axios.get(`${API_URL}/transaksi`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.data;
+};
+
+export const addTransaksi = async (token: string, data: any) => {
+  const res = await axios.post(`${API_URL}/transaksi`, data, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.data;
+};
+
+export const updateTransaksi = async (token: string, id: string, data: any) => {
+  const res = await axios.put(`${API_URL}/transaksi/${id}`, data, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.data;
+};
+
+export const deleteTransaksi = async (token: string, id: string) => {
+  const res = await axios.delete(`${API_URL}/transaksi/${id}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   return res.data;

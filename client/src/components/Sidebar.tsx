@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Users, BarChart, LogOut } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Users, BarChart } from "lucide-react";
 
 const menuItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Transaksi", href: "/transaksi", icon: ShoppingCart },
-  { name: "Inventaris", href: "/inventaris", icon: Package },
-  { name: "Kategori", href: "/kategori", icon: BarChart },
-  { name: "Manajemen User", href: "/users", icon: Users },
-  { name: "Laporan", href: "/laporan", icon: BarChart },
+  { name: "Merek", href: "/merek", icon: Users },
+  { name: "Kategori Barang", href: "/kategori-barang", icon: BarChart },
+  { name: "Sparepart", href: "/sparepart", icon: Package },
+  { name: "Laporan", href: "/laporan", icon: BarChart }
 ];
 
 export default function Sidebar() {

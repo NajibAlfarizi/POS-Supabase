@@ -5,9 +5,9 @@ import cors from 'cors'
 
 import express from 'express';
 import authRoutes from './routes/authRoutes.js';
-import inventarisRoutes from './routes/inventarisRoutes.js';
-import kategoriRoutes from './routes/kategoriRoutes.js';
-import stokRoutes from './routes/stokRoutes.js';
+import merekRoutes from './routes/merekRoutes.js';
+import kategoriBarangRoutes from './routes/kategoriBarangRoutes.js';
+import sparepartRoutes from './routes/sparepartRoutes.js';
 import transaksiRoutes from './routes/transaksiRoutes.js';
 import logger from './config/logger.js';
 
@@ -25,16 +25,16 @@ app.use(cors());
 // Register auth routes
 app.use('/auth', authRoutes);
 
-// Register inventaris routes
-app.use('/inventaris', inventarisRoutes);
+// register merek routes
+app.use('/merek', merekRoutes);
 
-// Register kategori routes
-app.use('/kategori', kategoriRoutes);
+// register kategori barang routes
+app.use('/kategori-barang', kategoriBarangRoutes);
 
-// Register stok routes
-app.use('/stok', stokRoutes);
+// register sparepart routes
+app.use('/sparepart', sparepartRoutes);
 
-// transaksi
+// register transaksi routes
 app.use('/transaksi', transaksiRoutes);
 
 const PORT = process.env.PORT;
