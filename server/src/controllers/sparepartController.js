@@ -1,5 +1,5 @@
 import supabase from '../config/supabase.js';
-import { Parser } from 'json2csv';
+import { json2csv } from 'json-2-csv';
 
 // Ambil semua sparepart
 export const getAllSparepart = async (req, res) => {
@@ -190,11 +190,12 @@ export const exportSparepartToCSV = async (req, res) => {
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 
-  const fields = ['id_sparepart', 'nama_barang', 'jumlah', 'terjual', 'sisa', 'harga_modal', 'harga_jual', 'id_kategori_barang', 'id_merek', 'created_at', 'updated_at'];
-  const parser = new Parser({ fields });
-  const csv = parser.parse(data);
-
-  res.header('Content-Type', 'text/csv');
-  res.attachment('sparepart_export.csv');
-  res.send(csv);
+  try {
+    const csv = await json2csv(data);
+    res.header('Content-Type', 'text/csv');
+    res.attachment('sparepart_export.csv');
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal konversi CSV: ' + err.message });
+  }
 };
