@@ -7,11 +7,11 @@ const router = express.Router();
 // Ambil semua kategori barang
 router.get('/', authenticate, getAllKategoriBarang);
 // Tambah kategori barang baru
-router.post('/', authenticate, authorizeRole('admin', 'owner'), addKategoriBarang);
+router.post('/', authenticate, addKategoriBarang);
 // Edit kategori barang
-router.put('/:id', authenticate, authorizeRole('admin', 'owner'), updateKategoriBarang);
+router.put('/:id', authenticate, updateKategoriBarang);
 // Hapus kategori barang
-router.delete('/:id', authenticate, authorizeRole('admin', 'owner'), deleteKategoriBarang);
+router.delete('/:id', authenticate, deleteKategoriBarang);
 // Statistik jumlah sparepart per kategori
 router.get('/statistik', authenticate, getSparepartStatByKategori);
 // Statistik penjualan per kategori

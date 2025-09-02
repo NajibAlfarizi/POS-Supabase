@@ -51,13 +51,6 @@ export const getDetailTransaksi = async (token: string, id: string) => {
   return res.data;
 };
 
-export const getStrukTransaksi = async (token: string, id: string) => {
-  const res = await axios.get(`${API_URL}/transaksi/${id}/struk`, {
-    headers: { Authorization: `Bearer ${token}` },
-    responseType: "blob"
-  });
-  return res.data;
-};
 
 export const getAllTransaksi = async (token: string) => {
   const res = await axios.get(`${API_URL}/transaksi`, {

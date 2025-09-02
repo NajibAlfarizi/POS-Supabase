@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/lib/api/authHelper.ts
 // Helper untuk autentikasi (login, register, get profile, dll)
 // Menyesuaikan endpoint di server: /auth/login, /auth/register, /auth/profile
@@ -42,7 +43,39 @@ export async function refreshAccessToken(refresh_token: string) {
   // Response: { user, access_token, refresh_token }
   return res.data;
 }
-export function refreshToken(): any {
-    throw new Error("Function not implemented.");
+// Handler API dengan refresh token otomatis
+export async function apiWithRefresh(
+  apiFn: (token: string) => Promise<any>,
+  token: string,
+  setToken: (t: string) => void,
+  setProfile: (p: any) => void,
+  router: any
+) {
+  try {
+    return await apiFn(token);
+  } catch (err: any) {
+    // Cek jika error 401 (token expired)
+    if (err?.response?.status === 401) {
+      try {
+        const user = getProfile();
+        const refreshed = await refreshAccessToken(user.refresh_token);
+        if (refreshed?.access_token) {
+          const newUser = { ...user, ...refreshed };
+          localStorage.setItem("user", JSON.stringify(newUser));
+          setProfile(newUser);
+          setToken(refreshed.access_token);
+          return await apiFn(refreshed.access_token);
+        } else {
+          localStorage.clear();
+          router.replace("/login");
+        }
+      } catch {
+        localStorage.clear();
+        router.replace("/login");
+      }
+    } else {
+      throw err;
+  }
+}
 }
 

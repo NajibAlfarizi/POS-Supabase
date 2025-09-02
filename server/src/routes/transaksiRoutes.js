@@ -13,14 +13,14 @@ router.put('/:id', authenticate, transaksiController.updateTransaksi);
 // Hapus transaksi
 router.delete('/:id', authenticate, transaksiController.deleteTransaksi);
 // Detail transaksi
-router.get('/:id', authenticate, transaksiController.getDetailTransaksi);
+
 // Ringkasan transaksi
 router.get('/ringkasan', authenticate, transaksiController.getRingkasanTransaksi);
-// Struk transaksi
-router.get('/struk/:id', authenticate, transaksiController.getStrukTransaksi);
 // Export transaksi ke CSV
 router.get('/export/csv', authenticate, transaksiController.exportTransaksiCSV);
 // Export transaksi ke Excel
 router.get('/export/excel', authenticate, transaksiController.exportTransaksiExcel);
+// Detail transaksi
+router.get('/:id', authenticate, transaksiController.getDetailTransaksi);
 
 export default router;

@@ -1,6 +1,44 @@
-import React from "react";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+'use client'
+import React, { useEffect, useState } from "react";
+import { getProfile, apiWithRefresh } from "@/lib/api/authHelper";
+import { useRouter } from "next/navigation";
 
 const DashboardPage: React.FC = () => {
+  const [profile, setProfile] = useState<any>(null);
+  const [token, setToken] = useState<string>("");
+  const router = useRouter();
+
+  useEffect(() => {
+    try {
+      const user = getProfile();
+      setProfile(user);
+      setToken(user.access_token);
+    } catch {
+      router.replace("/login");
+    }
+  }, [router]);
+
+  // Handler akses token dan refresh token
+  useEffect(() => {
+    if (!token) return;
+    const checkToken = async () => {
+      // Contoh: panggil API yang butuh token, misal getRingkasanTransaksi
+      await apiWithRefresh(
+        async (t) => {
+          // await getRingkasanTransaksi(t);
+          return true;
+        },
+        token,
+        setToken,
+        setProfile,
+        router
+      );
+    };
+    checkToken();
+  }, [token, router]);
+
   return (
     <div className="max-w-2xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6">Selamat Datang di Dashboard POS Sparepart</h1>

@@ -1,30 +1,51 @@
 import supabase from '../config/supabase.js';
 import { json2csv } from 'json-2-csv';
 import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
 
 // Ambil semua transaksi dengan filter
 export const getTransaksi = async (req, res) => {
-  const { tipe, id_sparepart, tanggal_mulai, tanggal_selesai, user_id, search } = req.query;
-  let query = supabase.from('transaksi').select('*, user_profiles(name), sparepart(nama_barang)');
+  const { tipe, sparepart, id_sparepart, tanggal_mulai, tanggal_selesai, user, search, sort, page = 1, limit = 10 } = req.query;
+  let query = supabase.from('transaksi').select('*, sparepart(nama_barang)');
   if (tipe) query = query.eq('tipe', tipe);
   if (id_sparepart) query = query.eq('id_sparepart', id_sparepart);
-  if (user_id) query = query.eq('user_id', user_id);
+  if (sparepart) query = query.ilike('sparepart', `%${sparepart}%`);
+  // if (user) query = query.ilike('user_profiles.name', `%${user}%`); // relasi tidak ada
   if (tanggal_mulai && tanggal_selesai) query = query.gte('tanggal', tanggal_mulai).lte('tanggal', tanggal_selesai);
   if (search) query = query.ilike('keterangan', `%${search}%`);
-  const { data, error } = await query.order('tanggal', { ascending: false });
+  // Pagination
+  const pageNum = Number(page) || 1;
+  const limitNum = Number(limit) || 10;
+  const from = (pageNum - 1) * limitNum;
+  const to = from + limitNum - 1;
+  query = query.range(from, to);
+  // Sorting
+  if (sort && sort.field) {
+    query = query.order(sort.field, { ascending: sort.order === 'asc' });
+  } else {
+    query = query.order('tanggal', { ascending: false });
+  }
+  const { data, error, count } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  // Get total count for pagination
+  let total = count;
+  if (typeof total !== 'number') {
+    // fallback: get total count
+    const { count: totalCount } = await supabase.from('transaksi').select('*', { count: 'exact', head: true });
+    total = totalCount || (Array.isArray(data) ? data.length : 0);
+  }
+  res.json({ data, total });
 };
 
 // Tambah transaksi baru & update stok sparepart otomatis
 export const addTransaksi = async (req, res) => {
-  const { id_sparepart, tipe, jumlah, harga_total, keterangan, user_id } = req.body;
-  if (!id_sparepart || !tipe || !jumlah || !harga_total || !user_id) {
-    return res.status(400).json({ error: 'id_sparepart, tipe, jumlah, harga_total, user_id wajib diisi.' });
+  const { id_sparepart, tipe, jumlah, harga_total, keterangan } = req.body;
+  if (!id_sparepart || !tipe || !jumlah || !harga_total) {
+    return res.status(400).json({ error: 'id_sparepart, tipe, jumlah, harga_total wajib diisi.' });
   }
   // Simpan transaksi
   const { data: trxData, error: trxError } = await supabase.from('transaksi').insert({
-    id_sparepart, tipe, jumlah, harga_total, keterangan, user_id
+    id_sparepart, tipe, jumlah, harga_total, keterangan
   }).select();
   if (trxError) return res.status(500).json({ error: trxError.message });
   // Update stok sparepart
@@ -34,12 +55,16 @@ export const addTransaksi = async (req, res) => {
   let newTerjual = sparepart.terjual;
   let newSisa = sparepart.sisa;
   if (tipe === 'masuk') {
+    // Barang keluar, stok berkurang, terjual bertambah
+    newJumlah -= jumlah;
+    newSisa -= jumlah;
+    newTerjual += jumlah;
+    if (newJumlah < 0) newJumlah = 0;
+    if (newSisa < 0) newSisa = 0;
+  } else if (tipe === 'keluar') {
+    // Barang masuk, stok bertambah
     newJumlah += jumlah;
     newSisa += jumlah;
-  } else if (tipe === 'keluar') {
-    newTerjual += jumlah;
-    newSisa -= jumlah;
-    if (newSisa < 0) newSisa = 0;
   }
   await supabase.from('sparepart').update({ jumlah: newJumlah, terjual: newTerjual, sisa: newSisa }).eq('id_sparepart', id_sparepart);
   res.status(201).json(trxData[0]);
@@ -68,7 +93,7 @@ export const deleteTransaksi = async (req, res) => {
 export const getDetailTransaksi = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ error: 'ID transaksi wajib diisi.' });
-  const { data, error } = await supabase.from('transaksi').select('*, user_profiles(name), sparepart(nama_barang)').eq('id_transaksi', id).single();
+  const { data, error } = await supabase.from('transaksi').select('*, sparepart(nama_barang)').eq('id_transaksi', id).single();
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Transaksi tidak ditemukan.' });
   res.json(data);
@@ -81,45 +106,33 @@ export const getRingkasanTransaksi = async (req, res) => {
   if (tipe) query = query.eq('tipe', tipe);
   if (tanggal_mulai && tanggal_selesai) query = query.gte('tanggal', tanggal_mulai).lte('tanggal', tanggal_selesai);
   const { data, error } = await query;
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('Ringkasan error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+  if (!data) {
+    console.error('Ringkasan error: data null');
+    return res.status(500).json({ error: 'Data transaksi tidak ditemukan.' });
+  }
   let total = 0;
   let cashflow = 0;
+  let total_masuk = 0;
+  let total_keluar = 0;
   if (data && data.length > 0) {
-    total = data.reduce((sum, trx) => sum + Number(trx.harga_total), 0);
-    cashflow = data.reduce((sum, trx) => {
-      if (trx.tipe === 'masuk') return sum + Number(trx.harga_total);
-      if (trx.tipe === 'keluar') return sum - Number(trx.harga_total);
-      return sum;
-    }, 0);
+    total = data.reduce((sum, trx) => sum + Number(trx.harga_total ?? 0), 0);
+    total_masuk = data.filter(trx => trx.tipe === 'masuk').reduce((sum, trx) => sum + Number(trx.harga_total ?? 0), 0);
+    total_keluar = data.filter(trx => trx.tipe === 'keluar').reduce((sum, trx) => sum + Number(trx.harga_total ?? 0), 0);
+    cashflow = total_masuk - total_keluar;
   }
-  res.json({ tipe: tipe || 'all', total_transaksi: total, cashflow });
+  res.json({ tipe: tipe || 'all', total_transaksi: total, cashflow, total_masuk, total_keluar });
 };
 
-// Struk transaksi
-export const getStrukTransaksi = async (req, res) => {
-  const { id } = req.params;
-  if (!id) return res.status(400).json({ error: 'ID transaksi wajib diisi.' });
-  const { data, error } = await supabase.from('transaksi').select('*, user_profiles(name), sparepart(nama_barang)').eq('id_transaksi', id).single();
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data) return res.status(404).json({ error: 'Transaksi tidak ditemukan.' });
-  const struk = {
-    toko: 'Nama Toko',
-    tanggal: data.tanggal,
-    kasir: data.user_profiles?.name || '-',
-    barang: data.sparepart?.nama_barang || '-',
-    jumlah: data.jumlah,
-    total: data.harga_total,
-    tipe: data.tipe,
-    keterangan: data.keterangan,
-    id_transaksi: data.id_transaksi
-  };
-  res.json(struk);
-};
+// Faktur transaksi (PDF)
 
 // Export transaksi ke CSV
 export const exportTransaksiCSV = async (req, res) => {
   const { tanggal_mulai, tanggal_selesai, tipe } = req.query;
-  let query = supabase.from('transaksi').select('id_transaksi, tipe, jumlah, harga_total, tanggal, keterangan, user_profiles(name), sparepart(nama_barang)');
+  let query = supabase.from('transaksi').select('id_transaksi, tipe, jumlah, harga_total, tanggal, keterangan, sparepart(nama_barang)');
   if (tipe) query = query.eq('tipe', tipe);
   if (tanggal_mulai && tanggal_selesai) query = query.gte('tanggal', tanggal_mulai).lte('tanggal', tanggal_selesai);
   const { data, error } = await query.order('tanggal', { ascending: false });
@@ -127,7 +140,6 @@ export const exportTransaksiCSV = async (req, res) => {
   const mapped = (data || []).map(trx => ({
     id_transaksi: trx.id_transaksi,
     barang: trx.sparepart?.nama_barang || '',
-    oleh: trx.user_profiles?.name || '',
     tipe: trx.tipe,
     jumlah: trx.jumlah,
     harga_total: trx.harga_total,
@@ -147,7 +159,7 @@ export const exportTransaksiCSV = async (req, res) => {
 // Export transaksi ke Excel
 export const exportTransaksiExcel = async (req, res) => {
   const { tanggal_mulai, tanggal_selesai, tipe } = req.query;
-  let query = supabase.from('transaksi').select('id_transaksi, tipe, jumlah, harga_total, tanggal, keterangan, user_profiles(name), sparepart(nama_barang)');
+  let query = supabase.from('transaksi').select('id_transaksi, tipe, jumlah, harga_total, tanggal, keterangan, sparepart(nama_barang)');
   if (tipe) query = query.eq('tipe', tipe);
   if (tanggal_mulai && tanggal_selesai) query = query.gte('tanggal', tanggal_mulai).lte('tanggal', tanggal_selesai);
   const { data, error } = await query.order('tanggal', { ascending: false });
@@ -155,7 +167,6 @@ export const exportTransaksiExcel = async (req, res) => {
   const mapped = (data || []).map(trx => ({
     id_transaksi: trx.id_transaksi,
     barang: trx.sparepart?.nama_barang || '',
-    oleh: trx.user_profiles?.name || '',
     tipe: trx.tipe,
     jumlah: trx.jumlah,
     harga_total: trx.harga_total,

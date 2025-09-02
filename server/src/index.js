@@ -20,7 +20,13 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
+// CORS middleware, support all origins and credentials
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+}));
 
 // Register auth routes
 app.use('/auth', authRoutes);

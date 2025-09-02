@@ -7,11 +7,11 @@ const router = express.Router();
 // Ambil semua sparepart
 router.get('/', authenticate, getAllSparepart);
 // Tambah sparepart baru
-router.post('/', authenticate, authorizeRole('admin', 'owner'), addSparepart);
+router.post('/', authenticate, addSparepart);
 // Edit sparepart
-router.put('/:id', authenticate, authorizeRole('admin', 'owner'), updateSparepart);
+router.put('/:id', authenticate, updateSparepart);
 // Hapus sparepart
-router.delete('/:id', authenticate, authorizeRole('admin', 'owner'), deleteSparepart);
+router.delete('/:id', authenticate, deleteSparepart);
 // Update stok dan penjualan sparepart otomatis berdasarkan transaksi
 router.post('/update-by-transaksi', authenticate, updateSparepartByTransaksi);
 // Statistik penjualan dan stok sparepart

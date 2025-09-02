@@ -2,7 +2,7 @@ import supabase from '../config/supabase.js';
 
 // Ambil semua kategori barang
 export const getAllKategoriBarang = async (req, res) => {
-  const { data, error } = await supabase.from('kategori_barang').select('*').order('nama_kategori', { ascending: true });
+  const { data, error } = await supabase.from('kategori_barang').select('id_kategori_barang, nama_kategori').order('nama_kategori', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 };
@@ -11,7 +11,7 @@ export const getAllKategoriBarang = async (req, res) => {
 export const addKategoriBarang = async (req, res) => {
   const { nama_kategori } = req.body;
   if (!nama_kategori) return res.status(400).json({ error: 'Nama kategori wajib diisi.' });
-  const { data, error } = await supabase.from('kategori_barang').insert({ nama_kategori }).select();
+  const { data, error } = await supabase.from('kategori_barang').insert({ nama_kategori }).select('id_kategori_barang, nama_kategori');
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(data[0]);
 };
@@ -21,7 +21,7 @@ export const updateKategoriBarang = async (req, res) => {
   const { id } = req.params;
   const { nama_kategori } = req.body;
   if (!nama_kategori) return res.status(400).json({ error: 'Nama kategori wajib diisi.' });
-  const { data, error } = await supabase.from('kategori_barang').update({ nama_kategori }).eq('id_kategori_barang', id).select();
+  const { data, error } = await supabase.from('kategori_barang').update({ nama_kategori }).eq('id_kategori_barang', id).select('id_kategori_barang, nama_kategori');
   if (error) return res.status(500).json({ error: error.message });
   res.json(data[0]);
 };
@@ -106,7 +106,7 @@ export const getPenjualanStatByKategori = async (req, res) => {
 // Filter/Search kategori
 export const searchKategori = async (req, res) => {
   const { q } = req.query;
-  let query = supabase.from('kategori_barang').select('*');
+  let query = supabase.from('kategori_barang').select('id_kategori_barang, nama_kategori');
   if (q) {
     query = query.ilike('nama_kategori', `%${q}%`);
   }

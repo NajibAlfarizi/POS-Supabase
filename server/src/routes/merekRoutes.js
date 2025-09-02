@@ -7,11 +7,11 @@ const router = express.Router();
 // Ambil semua merek
 router.get('/', authenticate, getAllMerek);
 // Tambah merek baru
-router.post('/', authenticate, authorizeRole('admin', 'owner'), addMerek);
+router.post('/', authenticate, addMerek);
 // Edit merek
-router.put('/:id', authenticate, authorizeRole('admin', 'owner'), updateMerek);
+router.put('/:id', authenticate, updateMerek);
 // Hapus merek
-router.delete('/:id', authenticate, authorizeRole('admin', 'owner'), deleteMerek);
+router.delete('/:id', authenticate, deleteMerek);
 // Statistik jumlah sparepart per merek dan breakdown per kategori
 router.get('/statistik', authenticate, getSparepartStatByMerek);
 // List kategori barang per merek
