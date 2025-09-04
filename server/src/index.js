@@ -16,12 +16,6 @@ import serverless from 'serverless-http';
 const app = express();
 app.use(express.json());
 
-// Logging (nonaktifkan untuk serverless Vercel)
-// app.use((req, res, next) => {
-//   logger.info(`${req.method} ${req.originalUrl}`);
-//   next();
-// });
-// Minimal route untuk tes serverless
 app.get('/', (req, res) => {
   res.json({ message: 'API is working!' });
 });
@@ -43,12 +37,12 @@ app.use(
 );
 
 // Routes
-app.use('/auth', authRoutes);
-app.use('/merek', merekRoutes);
-app.use('/kategori-barang', kategoriBarangRoutes);
-app.use('/sparepart', sparepartRoutes);
-app.use('/transaksi', transaksiRoutes);
-app.use('/laporan', laporanRoutes);
+// app.use('/auth', authRoutes);
+// app.use('/merek', merekRoutes);
+// app.use('/kategori-barang', kategoriBarangRoutes);
+// app.use('/sparepart', sparepartRoutes);
+// app.use('/transaksi', transaksiRoutes);
+// app.use('/laporan', laporanRoutes);
 
 // Export serverless function
 export default serverless(app);
