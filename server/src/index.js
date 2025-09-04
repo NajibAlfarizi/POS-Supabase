@@ -10,16 +10,20 @@ import kategoriBarangRoutes from './routes/kategoriBarangRoutes.js';
 import sparepartRoutes from './routes/sparepartRoutes.js';
 import transaksiRoutes from './routes/transaksiRoutes.js';
 import laporanRoutes from './routes/laporanRoutes.js';
-import logger from './config/logger.js';
+// import logger from './config/logger.js';
 import serverless from 'serverless-http';
 
 const app = express();
 app.use(express.json());
 
-// Logging
-app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.originalUrl}`);
-  next();
+// Logging (nonaktifkan untuk serverless Vercel)
+// app.use((req, res, next) => {
+//   logger.info(`${req.method} ${req.originalUrl}`);
+//   next();
+// });
+// Minimal route untuk tes serverless
+app.get('/', (req, res) => {
+  res.json({ message: 'API is working!' });
 });
 
 // CORS
@@ -46,5 +50,5 @@ app.use('/sparepart', sparepartRoutes);
 app.use('/transaksi', transaksiRoutes);
 app.use('/laporan', laporanRoutes);
 
-// ✅ Export hanya ESM
+// Export serverless function
 export default serverless(app);
