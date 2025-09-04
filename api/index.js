@@ -11,16 +11,16 @@ import kategoriBarangRoutes from '../server/src/routes/kategoriBarangRoutes.js';
 import sparepartRoutes from '../server/src/routes/sparepartRoutes.js';
 import transaksiRoutes from '../server/src/routes/transaksiRoutes.js';
 import laporanRoutes from '../server/src/routes/laporanRoutes.js';
-import logger from '../server/src/config/logger.js';
+// import logger from '../server/src/config/logger.js';
 
 const app = express();
 app.use(express.json());
 
 // Logging middleware
-app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.originalUrl}`);
-  next();
-});
+// app.use((req, res, next) => {
+//   logger.info(`${req.method} ${req.originalUrl}`);
+//   next();
+// });
 
 // CORS middleware
 app.use(cors({
@@ -29,6 +29,10 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
 }));
+
+app.get('/', (req, res) => {
+  res.json({ message: 'API is working!' });
+});
 
 // Register routes
 app.use('/auth', authRoutes);
