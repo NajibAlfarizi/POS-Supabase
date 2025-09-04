@@ -37,12 +37,12 @@ app.use(
 );
 
 // Routes
-// app.use('/auth', authRoutes);
-// app.use('/merek', merekRoutes);
-// app.use('/kategori-barang', kategoriBarangRoutes);
-// app.use('/sparepart', sparepartRoutes);
-// app.use('/transaksi', transaksiRoutes);
-// app.use('/laporan', laporanRoutes);
+app.use('/auth', authRoutes);
+app.use('/merek', merekRoutes);
+app.use('/kategori-barang', kategoriBarangRoutes);
+app.use('/sparepart', sparepartRoutes);
+app.use('/transaksi', transaksiRoutes);
+app.use('/laporan', laporanRoutes);
 
 // Export serverless function
 export default serverless(app);
