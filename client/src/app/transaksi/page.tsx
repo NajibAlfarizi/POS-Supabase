@@ -1,419 +1,447 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use client";
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+'use client'
+import { useEffect, useState } from "react";
 import {
   getTransaksi,
-  getRingkasanTransaksi,
-  exportTransaksiCSV,
-  exportTransaksiExcel,
   addTransaksi,
   updateTransaksi,
   deleteTransaksi,
-  getDetailTransaksi
-} from '@/lib/api/transaksiHelper';
-import { apiWithRefresh } from '@/lib/api/authHelper';
-import { getAllSparepart } from '@/lib/api/sparepartHelper';
+  exportTransaksiCSV,
+  exportTransaksiExcel,
+  getRingkasanTransaksi,
+  getDetailTransaksi,
+} from "@/lib/api/transaksiHelper";
+import { apiWithRefresh } from "@/lib/api/authHelper";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "sonner";
+import { getAllSparepart } from "@/lib/api/sparepartHelper";
+import { getAllKategoriBarang } from "@/lib/api/kategoriBarangHelper";
 
-// TODO: import helper untuk sparepart dan user jika diperlukan
+interface Transaksi {
+  id_transaksi: string;
+  tanggal: string;
+  jumlah: number;
+  harga_total: number;
+  tipe: string;
+  keterangan: string;
+  sparepart?: { nama_barang: string; kategori?: string } | null;
+  user?: string;
+}
 
-const TransaksiPage: React.FC = () => {
-  // Faktur dihapus, tidak ada state terkait faktur
-  const router = useRouter();
-  // State
-  const [token, setToken] = useState<string>('');
-  const [profile, setProfile] = useState<any>(null);
-  const [transaksiList, setTransaksiList] = useState<any[]>([]);
-  const [ringkasan, setRingkasan] = useState<any>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [showDetail, setShowDetail] = useState(false);
-  const [showRingkasan, setShowRingkasan] = useState(false);
-  const [selectedTransaksi, setSelectedTransaksi] = useState<any>(null);
-  // Faktur dihapus, tidak ada state terkait faktur
-  // fakturBlobUrl dihapus, hanya preview HTML
-  const [filter, setFilter] = useState({
-    tipe: '',
-    sparepart: '',
-    user: '',
-    tanggal_mulai: '',
-    tanggal_selesai: '',
-    search: ''
-  });
-  const [sort, setSort] = useState({ field: 'tanggal', order: 'desc' });
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+export default function TransaksiPage() {
+  const [data, setData] = useState<Transaksi[]>([]);
   const [total, setTotal] = useState(0);
-  // Fetch sparepart list for dropdown
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState<any>({});
+  const [filterDari, setFilterDari] = useState<string>("");
+  const [filterSampai, setFilterSampai] = useState<string>("");
+  const [filterKategori, setFilterKategori] = useState<string>("");
+  const [kategoriList, setKategoriList] = useState<any[]>([]);
+  const [openForm, setOpenForm] = useState(false);
+  const [formBarang, setFormBarang] = useState<string>("");
+  const [formJumlah, setFormJumlah] = useState<number>(1);
+  const [formKeterangan, setFormKeterangan] = useState<string>("");
+  const [formTipe, setFormTipe] = useState<string>("masuk");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [openDetail, setOpenDetail] = useState(false);
+  const [openRingkasan, setOpenRingkasan] = useState(false);
+  const [selected, setSelected] = useState<Transaksi | null>(null);
+  const [ringkasan, setRingkasan] = useState<any>(null);
+  const [token, setToken] = useState<string>("");
   const [sparepartList, setSparepartList] = useState<any[]>([]);
-  // State untuk export dropdown
-  const [showExportDropdown, setShowExportDropdown] = useState(false);
-
-  // Fetch transaksi list when token, filter, sort, page, or limit changes
+  const router = useRouter();
+  // Fetch sparepart & kategori list for filter dropdown
   useEffect(() => {
     if (!token) return;
-    const fetchTransaksi = async () => {
+    const fetchSparepartKategori = async () => {
       try {
-        const params = {
-          ...filter,
-          sort,
-          page,
-          limit,
-        };
-        const data = await apiWithRefresh(getTransaksi, token, setToken, setProfile, params);
-        setTransaksiList(Array.isArray(data?.data) ? data.data : []);
-        setTotal(typeof data?.total === 'number' ? data.total : (Array.isArray(data?.data) ? data.data.length : 0));
-      } catch (err) {
-        console.error("Gagal fetch transaksi:", err);
-        setTransaksiList([]);
-        setTotal(0);
+        const res = await apiWithRefresh(getAllSparepart, token, setToken, () => {}, router);
+        setSparepartList(Array.isArray(res) ? res : []);
+      } catch {
+        setSparepartList([]);
+      }
+      try {
+        const kategori = await apiWithRefresh(getAllKategoriBarang, token, setToken, () => {}, router);
+        setKategoriList(Array.isArray(kategori) ? kategori : []);
+      } catch {
+        setKategoriList([]);
       }
     };
-    fetchTransaksi();
-  }, [token, filter, sort, page, limit]);
+    fetchSparepartKategori();
+  }, [token, router]);
 
-  // Ambil token dari localStorage saat komponen mount
   useEffect(() => {
-    const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
-    if (!userStr) return;
+    // Ambil token dari localStorage (user.access_token)
+    const userStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+    if (!userStr) {
+      router.replace("/login");
+      return;
+    }
     try {
       const user = JSON.parse(userStr);
       setToken(user.access_token);
-      setProfile(user);
-    } catch {}
-  }, []);
+    } catch {
+      router.replace("/login");
+    }
+  }, [router]);
 
-  // Fetch sparepart list ketika token tersedia
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const sendFilters = { ...filters };
+      if (sendFilters.tipe === "all") delete sendFilters.tipe;
+      // Kirim filter tanggal jika ada
+      if (filterDari) sendFilters.dari = filterDari;
+      if (filterSampai) sendFilters.sampai = filterSampai;
+      // Kirim filter kategori jika ada
+      if (filterKategori) sendFilters.kategori = filterKategori;
+      const res = await apiWithRefresh(
+        (tok) => getTransaksi(tok, { ...sendFilters, page, limit }),
+        token,
+        setToken,
+        () => {},
+        router
+      );
+      setData(res.data);
+      setTotal(res.total);
+    } catch (e) {
+      toast.error("Gagal memuat transaksi");
+    }
+    setLoading(false);
+  };
+
+  const fetchRingkasan = async () => {
+    try {
+      const res = await apiWithRefresh(
+        (tok) => getRingkasanTransaksi(tok, filters),
+        token,
+        setToken,
+        () => {},
+        router
+      );
+      setRingkasan(res);
+    } catch (e) {
+      toast.error("Gagal memuat ringkasan");
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
-    const fetchSparepart = async () => {
-      try {
-        const data = await apiWithRefresh(
-          getAllSparepart,
-          token,
-          setToken,
-          setProfile,
-          router
-        );
-        if (!Array.isArray(data)) {
-          console.error('Data sparepart bukan array:', data);
-          setSparepartList([]);
-        } else {
-          setSparepartList(data);
-        }
-      } catch (err) {
-        console.error('Gagal fetch sparepart:', err);
-        setSparepartList([]);
-      }
-    };
-    fetchSparepart();
-  }, [token]);
+    fetchData();
+  }, [token, page, filters]);
 
-  // Fetch ringkasan
-  useEffect(() => {
-    if (!token) return;
-    const fetchRingkasan = async () => {
-      try {
-        const data = await apiWithRefresh(
-          getRingkasanTransaksi,
-          token,
-          setToken,
-          setProfile,
-          router
-        );
-        setRingkasan(data);
-      } catch {
-        setRingkasan(null);
-      }
-    };
-    fetchRingkasan();
-  }, [token]);
+  const handleDelete = async (id: string) => {
+    try {
+      await apiWithRefresh(
+        (tok) => deleteTransaksi(tok, id),
+        token,
+        setToken,
+        () => {},
+        router
+      );
+      toast.success("Transaksi dihapus");
+      fetchData();
+    } catch {
+      toast.error("Gagal menghapus transaksi");
+    }
+  };
+
+  // Modal tambah transaksi
+  // Hitung harga total otomatis
+  const getHargaTotal = () => {
+    const sparepart = sparepartList.find(sp => sp.id_sparepart === formBarang);
+    if (!sparepart || formJumlah <= 0) return 0;
+    if (formTipe === "masuk") {
+      // uang masuk, barang keluar, harga jual
+      return formJumlah * (sparepart.harga_jual ?? 0);
+    } else {
+      // uang keluar, barang masuk, harga modal
+      return formJumlah * (sparepart.harga_modal ?? 0);
+    }
+  };
+
+  const handleTambahTransaksi = async () => {
+    setShowConfirm(false);
+    if (!formBarang || formJumlah <= 0 || !formTipe) {
+      toast.error("Barang, jumlah, dan tipe wajib diisi");
+      return;
+    }
+    const harga_total = getHargaTotal();
+    try {
+      await apiWithRefresh(
+        (tok) => addTransaksi(tok, {
+          id_sparepart: formBarang,
+          jumlah: formJumlah,
+          tipe: formTipe,
+          harga_total,
+          keterangan: formKeterangan,
+        }),
+        token,
+        setToken,
+        () => {},
+        router
+      );
+      toast.success("Transaksi berhasil ditambah");
+      setOpenForm(false);
+      setFormBarang("");
+      setFormJumlah(1);
+      setFormKeterangan("");
+      setFormTipe("masuk");
+      fetchData();
+    } catch {
+      toast.error("Gagal tambah transaksi");
+    }
+  };
+
+  // Export handler (fix broken block)
+  const handleExport = async (type: "csv" | "excel") => {
+    try {
+      const fn = type === "csv" ? exportTransaksiCSV : exportTransaksiExcel;
+      const blob = await apiWithRefresh(
+        (tok) => fn(tok, filters),
+        token,
+        setToken,
+        () => {},
+        router
+      );
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `transaksi.${type === "csv" ? "csv" : "xlsx"}`;
+      a.click();
+    } catch {
+      toast.error("Gagal export");
+    }
+  };
 
   return (
-  <div className="max-w-6xl mx-auto py-8 px-2" onClick={() => showExportDropdown && setShowExportDropdown(false)}>
-      {/* 1. Header Section */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Manajemen Transaksi</h1>
+  <div className="max-w-5xl mx-auto py-8 px-2 space-y-4 bg-white">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
+        <h1 className="text-2xl font-bold bg-white px-6 py-2 rounded-xl shadow-lg border border-gray-200">Manajemen Transaksi</h1>
         <div className="flex gap-2">
-          <button className="bg-blue-600 text-white px-4 py-2 rounded font-semibold" onClick={() => setShowForm(true)}>
-            ➕ Tambah Transaksi
-          </button>
-          <div className="relative">
-            <button className="bg-green-600 text-white px-4 py-2 rounded font-semibold" onClick={e => { e.stopPropagation(); setShowExportDropdown(v => !v); }}>⬇️ Export</button>
-            {/* Dropdown Export: CSV, Excel */}
-            {showExportDropdown && (
-              <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow z-10">
-                <button className="block w-full px-4 py-2 text-left hover:bg-gray-100" onClick={async (e) => {
-                  e.stopPropagation();
-                  setShowExportDropdown(false);
-                  try {
-                    const blob = await apiWithRefresh(exportTransaksiCSV, token, setToken, () => {}, undefined);
-                    const url = window.URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob], { type: 'text/csv' }));
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'transaksi.csv';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
-                  } catch (err) {
-                    alert('Gagal export CSV');
-                  }
-                }}>CSV</button>
-                <button className="block w-full px-4 py-2 text-left hover:bg-gray-100" onClick={async (e) => {
-                  e.stopPropagation();
-                  setShowExportDropdown(false);
-                  try {
-                    const blob = await apiWithRefresh(exportTransaksiExcel, token, setToken, () => {}, undefined);
-                    const url = window.URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'transaksi.xlsx';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
-                  } catch (err) {
-                    alert('Gagal export Excel');
-                  }
-                }}>Excel</button>
-              </div>
-            )}
-          </div>
-          <button className="bg-yellow-500 text-white px-4 py-2 rounded font-semibold" onClick={() => setShowRingkasan(true)}>
-            🧾 Ringkasan
-          </button>
+          <Button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={() => setOpenForm(true)}>
+            Tambah Transaksi
+          </Button>
+          <Button variant="outline" className="bg-white text-black font-semibold px-4 py-2 rounded shadow border border-gray-200 hover:bg-gray-100" onClick={() => handleExport("csv")}>Export CSV</Button>
+          <Button variant="outline" className="bg-white text-black font-semibold px-4 py-2 rounded shadow border border-gray-200 hover:bg-gray-100" onClick={() => handleExport("excel")}>Export Excel</Button>
+          <Button variant="secondary" className="bg-white text-black font-semibold px-4 py-2 rounded shadow border border-gray-200 hover:bg-gray-100" onClick={() => { setOpenRingkasan(true); fetchRingkasan(); }}>Ringkasan</Button>
         </div>
       </div>
 
-      {/* 2. Filter & Search Bar */}
-      <div className="bg-white rounded shadow p-4 mb-4 flex flex-wrap gap-2 items-end">
-        <select className="border px-3 py-2 rounded" value={filter.tipe} onChange={e => setFilter(f => ({ ...f, tipe: e.target.value }))}>
-          <option value="">Tipe Transaksi</option>
-          <option value="masuk">Masuk</option>
-          <option value="keluar">Keluar</option>
-        </select>
-        {/* TODO: Autocomplete sparepart & user */}
-        <input type="text" className="border px-3 py-2 rounded" placeholder="Cari barang..." value={filter.sparepart} onChange={e => setFilter(f => ({ ...f, sparepart: e.target.value }))} />
-        <input type="date" className="border px-3 py-2 rounded" value={filter.tanggal_mulai} onChange={e => setFilter(f => ({ ...f, tanggal_mulai: e.target.value }))} />
-        <input type="date" className="border px-3 py-2 rounded" value={filter.tanggal_selesai} onChange={e => setFilter(f => ({ ...f, tanggal_selesai: e.target.value }))} />
-        <input type="text" className="border px-3 py-2 rounded" placeholder="Cari keterangan/ID..." value={filter.search} onChange={e => setFilter(f => ({ ...f, search: e.target.value }))} />
-        <button className="bg-blue-500 text-white px-4 py-2 rounded" onClick={() => setPage(1)}>🔍 Terapkan Filter</button>
-        <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => setFilter({ tipe: '', sparepart: '', user: '', tanggal_mulai: '', tanggal_selesai: '', search: '' })}>❌ Reset</button>
-      </div>
-
-      {/* 3. Tabel Data Transaksi */}
-      <div className="bg-white rounded shadow p-4">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="px-2 py-2"><input type="checkbox" /></th>
-                <th className="px-2 py-2">Tanggal</th>
-                <th className="px-2 py-2">Barang</th>
-                <th className="px-2 py-2">Jumlah</th>
-                <th className="px-2 py-2">Harga Total</th>
-                <th className="px-2 py-2">Tipe</th>
-                <th className="px-2 py-2">Keterangan</th>
-                <th className="px-2 py-2">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.isArray(transaksiList) && transaksiList.length > 0 ? (
-                transaksiList.map((trx, idx) => (
-                  <tr key={trx.id_transaksi} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-2 py-2"><input type="checkbox" /></td>
-                    <td className="px-2 py-2">{trx.tanggal ? trx.tanggal.slice(0, 10) : '-'}</td>
-                    <td className="px-2 py-2">{trx.sparepart?.nama_barang || '-'}</td>
-                    <td className="px-2 py-2">{trx.jumlah}</td>
-                    <td className="px-2 py-2">Rp{trx.harga_total}</td>
-                    <td className="px-2 py-2">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${trx.tipe === 'masuk' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{trx.tipe}</span>
-                    </td>
-                    <td className="px-2 py-2">{trx.keterangan}</td>
-                    <td className="px-2 py-2 flex gap-1">
-                      <button className="text-blue-600" title="Lihat" onClick={() => { setSelectedTransaksi(trx); setShowDetail(true); }}>👁</button>
-                      <button className="text-yellow-600" title="Edit" onClick={() => { setSelectedTransaksi(trx); setShowForm(true); }}>✏️</button>
-                      <button className="text-red-600" title="Hapus" onClick={() => apiWithRefresh((tok) => deleteTransaksi(tok, trx.id_transaksi), token, setToken, () => {}, router)}>🗑</button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={9} className="text-center py-8 text-gray-400">Menampilkan 0 data transaksi</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        {/* Pagination */}
-        <div className="flex items-center justify-between mt-4">
-          <span>Menampilkan {transaksiList.length} dari {total} transaksi</span>
-          <div className="flex gap-2">
-            <button className="px-3 py-1 rounded border" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Sebelumnya</button>
-            <span>Halaman {page}</span>
-            <button className="px-3 py-1 rounded border" disabled={transaksiList.length < limit} onClick={() => setPage(p => p + 1)}>Berikutnya</button>
-            <select className="border px-2 py-1 rounded" value={limit} onChange={e => setLimit(Number(e.target.value))}>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      {/* 4. Detail Transaksi Modal/Drawer */}
-      {showDetail && selectedTransaksi && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl border-2 border-blue-200 w-full max-w-lg p-8">
-            <div className="flex items-center gap-2 mb-6">
-              <span className="text-2xl">👁</span>
-              <h2 className="text-2xl font-bold">Detail Transaksi</h2>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
-                <div className="mb-1">ID: <span className="font-bold">{selectedTransaksi.id_transaksi}</span></div>
-                <div className="mb-1">Barang: <span className="font-bold">{selectedTransaksi.sparepart?.nama_barang || '-'}</span></div>
-                <div className="mb-1">Jumlah: <span className="font-bold">{selectedTransaksi.jumlah}</span></div>
-                <div className="mb-1">Harga Total: <span className="font-bold">Rp{selectedTransaksi.harga_total}</span></div>
-              </div>
-              <div>
-                <div className="mb-1">Tanggal: <span className="font-bold">{selectedTransaksi.tanggal}</span></div>
-                <div className="mb-1">User: <span className="font-bold">{selectedTransaksi.user_profiles?.name || '-'}</span></div>
-                <div className="mb-1">Tipe: <span className={`font-bold px-2 py-1 rounded ${selectedTransaksi.tipe === 'masuk' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{selectedTransaksi.tipe}</span></div>
-                <div className="mb-1">Keterangan: <span className="font-bold">{selectedTransaksi.keterangan}</span></div>
-              </div>
-            </div>
-            <div className="flex gap-4 justify-end mt-6">
-              <button className="bg-yellow-500 text-white px-4 py-2 rounded-lg font-bold" onClick={() => { setShowDetail(false); setShowForm(true); }}>✏️ Edit</button>
-              <button className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold" onClick={() => { apiWithRefresh((tok) => deleteTransaksi(tok, selectedTransaksi.id_transaksi), token, setToken, () => {}, undefined); setShowDetail(false); }}>🗑 Hapus</button>
-              <button className="px-4 py-2 rounded-lg border font-semibold hover:bg-gray-100" onClick={() => setShowDetail(false)}>Tutup</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. Form Tambah/Edit Transaksi */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form className="bg-white rounded-xl shadow-2xl border-2 border-blue-200 w-full max-w-lg p-8" onSubmit={async e => {
-            e.preventDefault();
-            const form = e.target as HTMLFormElement;
-            const id_sparepart = (form.id_sparepart as any)?.value || "";
-            const jumlah = Number((form.jumlah as any)?.value) || 0;
-            const tipe = (form.tipe as any)?.value || "";
-            const keterangan = (form.keterangan as any)?.value || "";
-            // Cari harga satuan dari sparepartList
-            const sparepart = sparepartList.find(sp => sp.id_sparepart === id_sparepart);
-            let harga_satuan = 0;
-            if (tipe === 'keluar') {
-              harga_satuan = sparepart?.harga_modal || 0;
-            } else {
-              harga_satuan = sparepart?.harga_jual || 0;
-            }
-            const harga_total = harga_satuan * jumlah;
-            const payload = {
-              id_sparepart,
-              jumlah,
-              harga_total,
-              tipe,
-              keterangan,
-            };
-            let trxRes;
-            if (selectedTransaksi) {
-              trxRes = await apiWithRefresh((tok) => updateTransaksi(tok, selectedTransaksi.id_transaksi, payload), token, setToken, setProfile, router);
-            } else {
-              trxRes = await apiWithRefresh((tok) => addTransaksi(tok, payload), token, setToken, setProfile, router);
-            }
-            // Fetch ulang data transaksi setelah submit
-            try {
-              const params = {
-                ...filter,
-                sort,
-                page,
-                limit,
-              };
-              const data = await apiWithRefresh(getTransaksi, token, setToken, setProfile, params);
-              setTransaksiList(Array.isArray(data?.data) ? data.data : []);
-            } catch (err) {
-              console.error("Gagal fetch transaksi setelah submit:", err);
-            }
-            setShowForm(false);
-            setSelectedTransaksi(null);
-            // Tampilkan faktur jika tambah transaksi (bukan edit)
-            if (!selectedTransaksi && trxRes && trxRes.id_transaksi) {
-              // Tidak ada logic faktur
-            }
-          }}>
-            <div className="flex items-center gap-2 mb-6">
-              <span className="text-2xl">{selectedTransaksi ? '✏️' : '➕'}</span>
-              <h2 className="text-2xl font-bold">{selectedTransaksi ? 'Edit Transaksi' : 'Tambah Transaksi'}</h2>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div className="relative w-full col-span-2">
-                <select
-                  name="id_sparepart"
-                  className="border-2 border-gray-300 px-3 py-2 rounded-lg w-full"
-                  defaultValue={selectedTransaksi?.id_sparepart || ''}
-                  required
-                >
-                  <option value="">Pilih Barang...</option>
-                  {sparepartList.map(sp => (
-                    <option key={sp.id_sparepart} value={sp.id_sparepart}>
-                      {sp.nama_barang}
-                    </option>
+      {/* Filter - desain modern & logic tanggal fix */}
+  <Card className="shadow-md border rounded-xl bg-white">
+  <CardHeader className="pb-2"><CardTitle className="text-lg font-bold">Filter</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex gap-3 flex-1 min-w-0">
+              <Select value={filterKategori || 'all'} onValueChange={val => setFilterKategori(val === 'all' ? '' : val)}>
+                <SelectTrigger className="w-[160px] bg-gray-50 border rounded-lg px-3 py-2"><SelectValue placeholder="Kategori Barang" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Kategori</SelectItem>
+                  {kategoriList.map(kat => (
+                    <SelectItem key={kat.id_kategori_barang} value={kat.id_kategori_barang}>{kat.nama_kategori}</SelectItem>
                   ))}
-                </select>
-              </div>
-              <input name="jumlah" type="number" className="border-2 border-gray-300 px-3 py-2 rounded-lg w-full" placeholder="Jumlah" defaultValue={selectedTransaksi?.jumlah || ''} required />
-              <select name="tipe" className="border-2 border-gray-300 px-3 py-2 rounded-lg w-full" defaultValue={selectedTransaksi?.tipe || ''} required>
-                <option value="">Tipe Transaksi</option>
-                <option value="masuk">Masuk</option>
-                <option value="keluar">Keluar</option>
-              </select>
-              <input name="keterangan" type="text" className="border-2 border-gray-300 px-3 py-2 rounded-lg w-full" placeholder="Keterangan" defaultValue={selectedTransaksi?.keterangan || ''} />
+                </SelectContent>
+              </Select>
+              <Select value={filters.tipe || ""} onValueChange={val => setFilters({ ...filters, tipe: val })}>
+                <SelectTrigger className="w-[120px] bg-gray-50 border rounded-lg px-3 py-2"><SelectValue placeholder="Tipe" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua</SelectItem>
+                  <SelectItem value="masuk">Masuk</SelectItem>
+                  <SelectItem value="keluar">Keluar</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filters.id_sparepart || ""} onValueChange={val => setFilters({ ...filters, id_sparepart: val === 'all' ? undefined : val })}>
+                <SelectTrigger className="w-[160px] bg-gray-50 border rounded-lg px-3 py-2"><SelectValue placeholder="Nama Barang" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Barang</SelectItem>
+                  {sparepartList.map(sp => (
+                    <SelectItem key={sp.id_sparepart} value={sp.id_sparepart}>{sp.nama_barang}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                className="w-[140px] bg-gray-50 border rounded-lg px-3 py-2"
+                value={filterDari}
+                onChange={e => setFilterDari(e.target.value)}
+                placeholder="Dari Tanggal"
+              />
+              <Input
+                type="date"
+                className="w-[140px] bg-gray-50 border rounded-lg px-3 py-2"
+                value={filterSampai}
+                onChange={e => setFilterSampai(e.target.value)}
+                placeholder="Sampai Tanggal"
+              />
             </div>
-            <div className="flex gap-4 justify-end mt-6">
-              <button type="button" className="px-6 py-2 rounded-lg border font-semibold hover:bg-gray-100" onClick={() => { setShowForm(false); setSelectedTransaksi(null); }}>Batal</button>
-              <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700">Simpan</button>
+            <div className="flex gap-2 items-center">
+              <Button className="px-5 py-2 font-bold rounded-lg" onClick={() => fetchData()}>Terapkan</Button>
+              <Button variant="ghost" className="px-5 py-2 rounded-lg" onClick={() => { setFilters({}); setFilterDari(""); setFilterSampai(""); setPage(1); }}>Reset</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabel */}
+      <Card className="bg-white rounded shadow border mt-2">
+        <CardContent>
+          <div className="w-full">
+            <Table className="w-full text-xs">
+              <TableHeader>
+                <TableRow className="bg-gray-200 border-b-2 border-gray-300">
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-6">No</TableHead>
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-16">Tanggal</TableHead>
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-20">Barang</TableHead>
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-14">Kategori</TableHead>
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-8">Jml</TableHead>
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-16">Total</TableHead>
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-10">Tipe</TableHead>
+                  <TableHead className="px-0.5 py-0.5 text-center font-bold w-20">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.map((trx, idx) => (
+                  <TableRow key={trx.id_transaksi} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <TableCell className="px-0.5 py-0.5 text-center">{(page - 1) * limit + idx + 1}</TableCell>
+                    <TableCell className="px-0.5 py-0.5 text-center">{new Date(trx.tanggal).toLocaleDateString()}</TableCell>
+                    <TableCell className="px-0.5 py-0.5 text-center truncate max-w-[70px]">{trx.sparepart?.nama_barang || "-"}</TableCell>
+                    <TableCell className="px-0.5 py-0.5 text-center truncate max-w-[50px]">{trx.sparepart?.kategori || "-"}</TableCell>
+                    <TableCell className="px-0.5 py-0.5 text-center">{trx.jumlah}</TableCell>
+                    <TableCell className="px-0.5 py-0.5 text-center">Rp {trx.harga_total.toLocaleString()}</TableCell>
+                    <TableCell className="px-0.5 py-0.5 text-center">
+                      <span className={`px-1 py-0.5 rounded text-white text-[10px] ${trx.tipe === "masuk" ? "bg-green-500" : "bg-red-500"}`}>
+                        {trx.tipe}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-0.5 py-0.5 text-center flex gap-0.5 flex-wrap justify-center">
+                      <Button size="sm" variant="outline" className="text-blue-600 px-1 py-0.5 rounded hover:bg-blue-100 min-w-[32px]" onClick={() => { setSelected(trx); setOpenDetail(true); }}>Lihat</Button>
+                      <Button size="sm" variant="outline" className="text-gray-600 px-1 py-0.5 rounded hover:bg-gray-100 min-w-[32px]" onClick={() => { setSelected(trx); setOpenForm(true); }}>Edit</Button>
+                      <Button size="sm" variant="destructive" className="text-white px-1 py-0.5 rounded hover:bg-red-100 min-w-[32px]" onClick={() => handleDelete(trx.id_transaksi)}>Hapus</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {/* Pagination */}
+          <div className="flex flex-wrap justify-between items-center mt-2 gap-2">
+            <Button disabled={page === 1} className="bg-gray-100 text-gray-700 px-4 py-2 rounded" onClick={() => setPage(page - 1)}>Prev</Button>
+            <span className="font-semibold">Page {page}</span>
+            <Button disabled={page * limit >= total} className="bg-gray-100 text-gray-700 px-4 py-2 rounded" onClick={() => setPage(page + 1)}>Next</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Modal Tambah Transaksi */}
+      <Dialog open={openForm} onOpenChange={setOpenForm}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Tambah Transaksi</DialogTitle></DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={e => {
+              e.preventDefault();
+              setShowConfirm(true);
+            }}
+          >
+            <div>
+              <label className="block mb-1 font-semibold">Barang</label>
+              <Select value={formBarang} onValueChange={setFormBarang}>
+                <SelectTrigger><SelectValue placeholder="Pilih Barang" /></SelectTrigger>
+                <SelectContent>
+                  {sparepartList.map(sp => (
+                    <SelectItem key={sp.id_sparepart} value={sp.id_sparepart}>{sp.nama_barang}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold">Jumlah</label>
+              <Input type="number" min={1} value={formJumlah} onChange={e => setFormJumlah(Number(e.target.value))} required />
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold">Tipe</label>
+              <Select value={formTipe} onValueChange={setFormTipe}>
+                <SelectTrigger><SelectValue placeholder="Pilih Tipe" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="masuk">Masuk</SelectItem>
+                  <SelectItem value="keluar">Keluar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold">Keterangan</label>
+              <Input value={formKeterangan} onChange={e => setFormKeterangan(e.target.value)} placeholder="Keterangan (opsional)" />
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold">Total Harga</label>
+              <Input value={getHargaTotal().toLocaleString()} readOnly disabled />
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <Button type="button" variant="ghost" onClick={() => setOpenForm(false)}>Batal</Button>
+              <Button type="submit">Simpan</Button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* 6. Ringkasan Transaksi Modal/Drawer */}
-      {showRingkasan && ringkasan && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl border-2 border-yellow-300 w-full max-w-md p-8">
-            <div className="flex items-center gap-2 mb-6">
-              <span className="text-2xl">🧾</span>
-              <h2 className="text-2xl font-bold">Ringkasan Transaksi</h2>
-            </div>
-            <div className="space-y-4 mb-4">
-              <div className="bg-blue-50 rounded p-4 flex flex-col items-center">
-                <div className="text-sm text-gray-500">Total Transaksi</div>
-                <div className="text-2xl font-bold">Rp{ringkasan.total_transaksi}</div>
-              </div>
-              <div className="bg-green-50 rounded p-4 flex flex-col items-center">
-                <div className="text-sm text-gray-500">Cashflow</div>
-                <div className="text-2xl font-bold">Rp{ringkasan.cashflow}</div>
-              </div>
-              <div className="bg-green-100 rounded p-2 flex justify-between">
-                <span className="font-bold">🔼 Total Masuk</span>
-                <span>Rp{ringkasan.total_masuk}</span>
-              </div>
-              <div className="bg-red-100 rounded p-2 flex justify-between">
-                <span className="font-bold">🔽 Total Keluar</span>
-                <span>Rp{ringkasan.total_keluar}</span>
-              </div>
-            </div>
-            {/* TODO: grafik kecil opsional */}
-            <div className="flex justify-end mt-6">
-              <button className="px-6 py-2 rounded-lg border font-semibold hover:bg-gray-100" onClick={() => setShowRingkasan(false)}>Tutup</button>
-            </div>
+      {/* Dialog Konfirmasi Transaksi */}
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Konfirmasi Transaksi</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <p>Barang: <b>{sparepartList.find(sp => sp.id_sparepart === formBarang)?.nama_barang || ""}</b></p>
+            <p>Jumlah: <b>{formJumlah}</b></p>
+            <p>Tipe: <b>{formTipe}</b></p>
+            <p>Total Harga: <b>Rp {getHargaTotal().toLocaleString()}</b></p>
           </div>
-        </div>
-      )}
+          <div className="flex gap-2 justify-end mt-4">
+            <Button variant="ghost" onClick={() => setShowConfirm(false)}>Batal</Button>
+            <Button onClick={handleTambahTransaksi}>Konfirmasi</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Detail */}
+      <Dialog open={openDetail} onOpenChange={setOpenDetail}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Detail Transaksi</DialogTitle></DialogHeader>
+          {selected && (
+            <div className="space-y-2">
+              <p><b>ID:</b> {selected.id_transaksi}</p>
+              <p><b>Barang:</b> {selected.sparepart?.nama_barang}</p>
+              <p><b>Kategori:</b> {selected.sparepart?.kategori || '-'}</p>
+              <p><b>Jumlah:</b> {selected.jumlah}</p>
+              <p><b>Total:</b> Rp {selected.harga_total.toLocaleString()}</p>
+              <p><b>Tanggal:</b> {new Date(selected.tanggal).toLocaleString()}</p>
+              <p><b>Tipe:</b> {selected.tipe}</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Ringkasan */}
+      <Dialog open={openRingkasan} onOpenChange={setOpenRingkasan}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Ringkasan Transaksi</DialogTitle></DialogHeader>
+          {ringkasan && (
+            <div className="grid gap-2">
+              <Card><CardContent>Total: Rp {ringkasan.total_transaksi.toLocaleString()}</CardContent></Card>
+              <Card><CardContent>Cashflow: Rp {ringkasan.cashflow.toLocaleString()}</CardContent></Card>
+              <Card><CardContent>Total Masuk: Rp {ringkasan.total_masuk.toLocaleString()}</CardContent></Card>
+              <Card><CardContent>Total Keluar: Rp {ringkasan.total_keluar.toLocaleString()}</CardContent></Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
-
-export default TransaksiPage;
+}

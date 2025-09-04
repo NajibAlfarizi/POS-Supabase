@@ -1,5 +1,6 @@
 import supabase from '../config/supabase.js';
 import { json2csv } from 'json-2-csv';
+import ExcelJS from 'exceljs';
 
 // Ambil semua sparepart
 export const getAllSparepart = async (req, res) => {
@@ -198,4 +199,65 @@ export const exportSparepartToCSV = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Gagal konversi CSV: ' + err.message });
   }
+};
+
+// Export data sparepart ke Excel multi-sheet (per merek, per kategori)
+export const exportSparepartToExcel = async (req, res) => {
+  // Ambil semua sparepart beserta relasi merek dan kategori
+  const { data: spareparts, error } = await supabase
+    .from('sparepart')
+    .select('nama_barang, jumlah, terjual, sisa, merek(id_merek, nama_merek), kategori_barang(id_kategori_barang, nama_kategori)');
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Kelompokkan berdasarkan merek
+  const merekMap = {};
+  for (const sp of spareparts) {
+    const merek = sp.merek?.nama_merek || 'Tanpa Merek';
+    if (!merekMap[merek]) merekMap[merek] = [];
+    merekMap[merek].push(sp);
+  }
+
+  // Buat workbook Excel
+  const workbook = new ExcelJS.Workbook();
+
+  for (const [merek, items] of Object.entries(merekMap)) {
+    // Sheet per merek
+    const sheet = workbook.addWorksheet(merek);
+    sheet.columns = [
+      { header: 'Kategori', key: 'kategori', width: 20 },
+      { header: 'Nama Barang', key: 'nama_barang', width: 30 },
+      { header: 'Stok', key: 'jumlah', width: 10 },
+      { header: 'Terjual', key: 'terjual', width: 10 },
+      { header: 'Sisa', key: 'sisa', width: 10 },
+    ];
+
+    // Kelompokkan per kategori
+    const kategoriMap = {};
+    for (const item of items) {
+      const kategori = item.kategori_barang?.nama_kategori || 'Tanpa Kategori';
+      if (!kategoriMap[kategori]) kategoriMap[kategori] = [];
+      kategoriMap[kategori].push(item);
+    }
+
+    // Isi data per kategori
+    for (const [kategori, barangList] of Object.entries(kategoriMap)) {
+      for (const barang of barangList) {
+        sheet.addRow({
+          kategori,
+          nama_barang: barang.nama_barang,
+          jumlah: barang.jumlah,
+          terjual: barang.terjual,
+          sisa: barang.sisa,
+        });
+      }
+      // Tambahkan baris kosong antar kategori
+      sheet.addRow({});
+    }
+  }
+
+  // Generate file Excel dan kirim sebagai attachment
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=sparepart_export.xlsx');
+  await workbook.xlsx.write(res);
+  res.end();
 };

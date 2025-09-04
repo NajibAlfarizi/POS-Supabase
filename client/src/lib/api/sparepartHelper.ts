@@ -90,3 +90,12 @@ export const getSparepartStokRendah = async (token: string, threshold?: number):
   });
   return res.data;
 };
+
+// Export sparepart ke Excel multi-sheet
+export const exportSparepartToExcel = async (token: string): Promise<Blob> => {
+  const res = await axios.get(`${API_URL}/sparepart/export-excel`, {
+    headers: { Authorization: `Bearer ${token}` },
+    responseType: 'blob',
+  });
+  return res.data;
+};

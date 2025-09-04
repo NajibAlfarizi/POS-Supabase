@@ -9,6 +9,7 @@ import merekRoutes from './routes/merekRoutes.js';
 import kategoriBarangRoutes from './routes/kategoriBarangRoutes.js';
 import sparepartRoutes from './routes/sparepartRoutes.js';
 import transaksiRoutes from './routes/transaksiRoutes.js';
+import laporanRoutes from './routes/laporanRoutes.js';
 import logger from './config/logger.js';
 
 const app = express();
@@ -42,6 +43,9 @@ app.use('/sparepart', sparepartRoutes);
 
 // register transaksi routes
 app.use('/transaksi', transaksiRoutes);
+
+// register laporan routes
+app.use('/laporan', laporanRoutes);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {

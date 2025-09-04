@@ -5,36 +5,88 @@ import PDFDocument from 'pdfkit';
 
 // Ambil semua transaksi dengan filter
 export const getTransaksi = async (req, res) => {
-  const { tipe, sparepart, id_sparepart, tanggal_mulai, tanggal_selesai, user, search, sort, page = 1, limit = 10 } = req.query;
-  let query = supabase.from('transaksi').select('*, sparepart(nama_barang)');
+  const { tipe, sparepart, id_sparepart, tanggal_mulai, tanggal_selesai, user, search, sort, page = 1, limit = 10, kategori } = req.query;
+  // Build query for data (with pagination), select kolom minimal
+  let query = supabase.from('transaksi').select('id_transaksi, tanggal, jumlah, harga_total, tipe, keterangan, id_sparepart');
   if (tipe) query = query.eq('tipe', tipe);
   if (id_sparepart) query = query.eq('id_sparepart', id_sparepart);
-  if (sparepart) query = query.ilike('sparepart', `%${sparepart}%`);
-  // if (user) query = query.ilike('user_profiles.name', `%${user}%`); // relasi tidak ada
+  // Filter by kategori barang (from sparepart)
+  let kategoriSparepartIds = null;
+  if (kategori) {
+    // Ambil semua id_sparepart yang punya kategori sesuai
+    const { data: sparepartsKategori } = await supabase.from('sparepart').select('id_sparepart').eq('id_kategori_barang', kategori);
+    kategoriSparepartIds = (sparepartsKategori || []).map(sp => sp.id_sparepart);
+    if (kategoriSparepartIds.length > 0) {
+      query = query.in('id_sparepart', kategoriSparepartIds);
+    } else {
+      // Tidak ada sparepart dengan kategori tsb, return kosong
+      return res.json({ data: [], total: 0 });
+    }
+  }
   if (tanggal_mulai && tanggal_selesai) query = query.gte('tanggal', tanggal_mulai).lte('tanggal', tanggal_selesai);
   if (search) query = query.ilike('keterangan', `%${search}%`);
+  // Sorting
+  let sortObj = null;
+  if (sort) {
+    try {
+      sortObj = typeof sort === 'string' ? JSON.parse(sort) : sort;
+    } catch {
+      sortObj = null;
+    }
+  }
+  if (sortObj?.field) {
+    query = query.order(sortObj.field, { ascending: sortObj.order === 'asc' });
+  } else {
+    query = query.order('tanggal', { ascending: false }); // default sort
+  }
   // Pagination
   const pageNum = Number(page) || 1;
   const limitNum = Number(limit) || 10;
   const from = (pageNum - 1) * limitNum;
   const to = from + limitNum - 1;
   query = query.range(from, to);
-  // Sorting
-  if (sort && sort.field) {
-    query = query.order(sort.field, { ascending: sort.order === 'asc' });
-  } else {
-    query = query.order('tanggal', { ascending: false });
-  }
-  const { data, error, count } = await query;
+  // Query data
+  const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  // Get total count for pagination
-  let total = count;
-  if (typeof total !== 'number') {
-    // fallback: get total count
-    const { count: totalCount } = await supabase.from('transaksi').select('*', { count: 'exact', head: true });
-    total = totalCount || (Array.isArray(data) ? data.length : 0);
+  // Query total count (filtered) - select id_transaksi only
+  let countQuery = supabase.from('transaksi').select('id_transaksi', { count: 'exact', head: true });
+  if (tipe) countQuery = countQuery.eq('tipe', tipe);
+  if (id_sparepart) countQuery = countQuery.eq('id_sparepart', id_sparepart);
+  if (kategoriSparepartIds) {
+    if (kategoriSparepartIds.length > 0) {
+      countQuery = countQuery.in('id_sparepart', kategoriSparepartIds);
+    } else {
+      return res.json({ data: [], total: 0 });
+    }
   }
-  res.json({ data, total });
+  if (tanggal_mulai && tanggal_selesai) countQuery = countQuery.gte('tanggal', tanggal_mulai).lte('tanggal', tanggal_selesai);
+  if (search) countQuery = countQuery.ilike('keterangan', `%${search}%`);
+  const { count: total } = await countQuery;
+  // Ambil semua id_sparepart unik dari hasil transaksi
+  const sparepartIds = Array.from(new Set((data || []).map(trx => trx.id_sparepart).filter(Boolean)));
+  let sparepartMap = {};
+  if (sparepartIds.length > 0) {
+    // Ambil nama_barang dan kategori
+    const { data: spareparts } = await supabase.from('sparepart').select('id_sparepart, nama_barang, id_kategori_barang').in('id_sparepart', sparepartIds);
+    let kategoriMap = {};
+    // Ambil kategori barang
+    const kategoriIds = Array.from(new Set((spareparts || []).map(sp => sp.id_kategori_barang).filter(Boolean)));
+    if (kategoriIds.length > 0) {
+      const { data: kategoriData } = await supabase.from('kategori_barang').select('id_kategori_barang, nama_kategori').in('id_kategori_barang', kategoriIds);
+      if (Array.isArray(kategoriData)) {
+        kategoriMap = Object.fromEntries(kategoriData.map(kat => [kat.id_kategori_barang, kat.nama_kategori]));
+      }
+    }
+    if (Array.isArray(spareparts)) {
+      sparepartMap = Object.fromEntries(spareparts.map(sp => [sp.id_sparepart, { nama_barang: sp.nama_barang, kategori: kategoriMap[sp.id_kategori_barang] || null }]));
+    }
+  }
+  // Gabungkan data transaksi dengan nama_barang dan kategori dari sparepartMap
+  const dataWithSparepart = (data || []).map(trx => ({
+    ...trx,
+    sparepart: trx.id_sparepart ? sparepartMap[trx.id_sparepart] || null : null
+  }));
+  res.json({ data: dataWithSparepart, total: total || 0 });
 };
 
 // Tambah transaksi baru & update stok sparepart otomatis
@@ -126,8 +178,6 @@ export const getRingkasanTransaksi = async (req, res) => {
   }
   res.json({ tipe: tipe || 'all', total_transaksi: total, cashflow, total_masuk, total_keluar });
 };
-
-// Faktur transaksi (PDF)
 
 // Export transaksi ke CSV
 export const exportTransaksiCSV = async (req, res) => {

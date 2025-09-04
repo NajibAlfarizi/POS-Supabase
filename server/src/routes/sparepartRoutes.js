@@ -1,5 +1,5 @@
 import express from 'express';
-import { getAllSparepart, addSparepart, updateSparepart, deleteSparepart, updateSparepartByTransaksi, getSparepartStatistik, getRiwayatTransaksiSparepart, searchSparepart, getSparepartStokRendah } from '../controllers/sparepartController.js';
+import { getAllSparepart, addSparepart, updateSparepart, deleteSparepart, updateSparepartByTransaksi, getSparepartStatistik, getRiwayatTransaksiSparepart, searchSparepart, getSparepartStokRendah, exportSparepartToExcel } from '../controllers/sparepartController.js';
 import { authenticate, authorizeRole } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -21,6 +21,10 @@ router.get('/:id_sparepart/riwayat-transaksi', authenticate, getRiwayatTransaksi
 // Search sparepart
 router.get('/search', authenticate, searchSparepart);
 // Notifikasi stok rendah
+
 router.get('/stok-rendah', authenticate, getSparepartStokRendah);
+
+// Export sparepart ke Excel multi-sheet
+router.get('/export-excel', authenticate, exportSparepartToExcel);
 
 export default router;

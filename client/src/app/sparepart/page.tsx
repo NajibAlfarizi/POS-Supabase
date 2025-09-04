@@ -9,7 +9,8 @@ import {
   getSparepartStatistik,
   getRiwayatTransaksiSparepart,
   searchSparepart,
-  getSparepartStokRendah
+  getSparepartStokRendah,
+  exportSparepartToExcel
 } from '@/lib/api/sparepartHelper';
 import { getAllKategoriBarang } from '@/lib/api/kategoriBarangHelper';
 import { getAllMerek } from '@/lib/api/merekHelper';
@@ -23,6 +24,32 @@ const TABS = [
 ];
 
 const SparepartPage: React.FC = () => {
+  // ...existing state and hooks...
+
+  // Export Excel handler
+  const handleExportExcel = async () => {
+    if (!token) return;
+    try {
+      const blob = await apiWithRefresh(
+        (tok) => exportSparepartToExcel(tok),
+        token,
+        setToken,
+        () => {},
+        router
+      );
+      // Download file
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sparepart_export.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Gagal export Excel');
+    }
+  };
   const [sparepartList, setSparepartList] = useState<any[]>([]);
   const [statistik, setStatistik] = useState<any>(null);
   const [stokRendahList, setStokRendahList] = useState<any[]>([]);
@@ -264,8 +291,9 @@ const SparepartPage: React.FC = () => {
             <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={handleAdd}>
               ➕ Tambah Sparepart
             </button>
-            {/* Export CSV button opsional */}
-            {/* <button className="bg-green-600 text-white px-4 py-2 rounded">📤 Export CSV</button> */}
+            <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={handleExportExcel}>
+              📤 Export Excel
+            </button>
           </div>
         </div>
         <div className="flex gap-2 mb-2">
