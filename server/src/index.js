@@ -10,8 +10,7 @@ import kategoriBarangRoutes from './routes/kategoriBarangRoutes.js';
 import sparepartRoutes from './routes/sparepartRoutes.js';
 import transaksiRoutes from './routes/transaksiRoutes.js';
 import laporanRoutes from './routes/laporanRoutes.js';
-// import logger from './config/logger.js';
-import serverless from 'serverless-http';
+import logger from './config/logger.js';
 
 const app = express();
 app.use(express.json());
@@ -44,5 +43,8 @@ app.use('/sparepart', sparepartRoutes);
 app.use('/transaksi', transaksiRoutes);
 app.use('/laporan', laporanRoutes);
 
-// Export serverless function
-export default serverless(app);
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
